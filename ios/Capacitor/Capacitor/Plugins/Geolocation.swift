@@ -14,7 +14,8 @@ public struct GeolocationCoords {
 class GetLocationHandler: NSObject, CLLocationManagerDelegate {
   var locationManager = CLLocationManager()
   var call: CAPPluginCall
-
+  private var requestLocationAuthorizationCallback: ((CLAuthorizationStatus) -> Void)?
+  
   init(call: CAPPluginCall, options: [String:Any]) {
     self.call = call
     
@@ -22,7 +23,19 @@ class GetLocationHandler: NSObject, CLLocationManagerDelegate {
     
     // TODO: Allow user to configure accuracy, request/authorization mode
     self.locationManager.delegate = self
-    self.locationManager.requestWhenInUseAuthorization()
+
+    // Request Authorization always if iOS version >= 13,4
+    if #available(iOS 13.4, *) {
+        self.requestLocationAuthorizationCallback = { status in
+            if status == .authorizedWhenInUse {
+                self.locationManager.requestAlwaysAuthorization()
+            }
+        }
+        self.locationManager.requestWhenInUseAuthorization()
+    } else {
+        self.locationManager.requestAlwaysAuthorization()
+    }
+
     let shouldWatch = options["watch"] as! Bool
     if call.getBool("enableHighAccuracy", false)! {
       if shouldWatch {
@@ -40,6 +53,11 @@ class GetLocationHandler: NSObject, CLLocationManagerDelegate {
       self.locationManager.requestLocation()
     }
   }
+    
+    // MARK: - CLLocationManagerDelegate
+  public func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+    self.requestLocationAuthorizationCallback?(status)
+            
 
   public func stopUpdating() {
     self.locationManager.stopUpdatingLocation()
